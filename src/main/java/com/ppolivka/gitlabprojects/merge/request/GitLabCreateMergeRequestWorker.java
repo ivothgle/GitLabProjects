@@ -5,10 +5,12 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.ThrowableComputable;
+import com.intellij.openapi.vcs.VcsException;
 import com.intellij.openapi.vcs.VcsNotifier;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.ThrowableConvertor;
 import com.intellij.util.containers.Convertor;
+import com.intellij.vcs.log.VcsCommitMetadata;
 import com.ppolivka.gitlabprojects.api.dto.ServerDto;
 import com.ppolivka.gitlabprojects.dto.GitlabServer;
 import com.ppolivka.gitlabprojects.util.GitLabUtil;
@@ -22,6 +24,7 @@ import com.ppolivka.gitlabprojects.merge.info.DiffInfo;
 import git4idea.GitLocalBranch;
 import git4idea.commands.Git;
 import git4idea.commands.GitCommandResult;
+import git4idea.history.GitHistoryUtils;
 import git4idea.repo.GitRepository;
 import org.gitlab.api.models.GitlabBranch;
 import org.gitlab.api.models.GitlabMergeRequest;
@@ -332,6 +335,22 @@ public class GitLabCreateMergeRequestWorker implements GitLabMergeRequestWorker 
         this.searchableUsers = searchableUsers;
     }
 
+    public String getLastCommitMessage() {
+        try {
+            List<VcsCommitMetadata> lastCommits = GitHistoryUtils.readLastCommits(project, getGitRepository().getRoot(), gitLocalBranch.getName());
+            if (lastCommits != null) {
+                return lastCommits.get(0).getSubject();
+            }
+        } catch (VcsException e) {
+            e.printStackTrace();
+        }
+
+        return "";
+    }
+
+    public VirtualFile getGitlabIssueTemplatesRoot() {
+        return getGitRepository().getRoot().findFileByRelativePath(".gitlab/merge_request_templates");
+    }
     //endregion
 
 }

@@ -41,7 +41,7 @@ public class ProjectState implements PersistentStateComponent<ProjectState.State
 
     public static class State {
         public String lastMergedBranch;
-        public Boolean deleteMergedBranch;
+        public Boolean deleteMergedBranch = true;
         public Boolean mergeAsWorkInProgress;
         public Map<Integer, Integer> projectIdMap = new HashMap();
     }

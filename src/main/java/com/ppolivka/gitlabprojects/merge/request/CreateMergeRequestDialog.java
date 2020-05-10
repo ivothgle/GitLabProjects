@@ -1,19 +1,29 @@
 package com.ppolivka.gitlabprojects.merge.request;
 
+import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.VfsUtil;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.SortedComboBoxModel;
+import com.intellij.util.containers.Convertor;
 import com.ppolivka.gitlabprojects.component.SearchBoxModel;
 import com.ppolivka.gitlabprojects.configuration.ProjectState;
+import com.ppolivka.gitlabprojects.configuration.SettingsState;
 import com.ppolivka.gitlabprojects.merge.info.BranchInfo;
+import com.ppolivka.gitlabprojects.util.GitLabUtil;
 import org.apache.commons.lang.StringUtils;
 import org.gitlab.api.models.GitlabUser;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import java.awt.event.ItemEvent;
+import java.io.IOException;
+
+import static com.ppolivka.gitlabprojects.util.MessageUtil.showErrorDialog;
 
 /**
  * Dialog fore creating merge requests
@@ -34,6 +44,8 @@ public class CreateMergeRequestDialog extends DialogWrapper {
     private JComboBox assigneeBox;
     private JCheckBox removeSourceBranch;
     private JCheckBox wip;
+    private JComboBox templateBox;
+    private JButton assignMe;
 
     private SortedComboBoxModel<BranchInfo> myBranchModel;
     private BranchInfo lastSelectedBranch;
@@ -63,6 +75,51 @@ public class CreateMergeRequestDialog extends DialogWrapper {
         assigneeBox.setEditable(true);
         assigneeBox.addItemListener(searchBoxModel);
         assigneeBox.setBounds(140, 170, 180, 20);
+
+        assignMe.addActionListener(event -> {
+            GitLabUtil.computeValueInModal(project, "Changing assignee...", (Convertor<ProgressIndicator, Void>) o -> {
+                try {
+                    SettingsState settingsState = SettingsState.getInstance();
+                    GitlabUser currentUser = settingsState.api(mergeRequestWorker.getGitRepository()).getCurrentUser();
+                    assigneeBox.setSelectedItem(new SearchableUser(currentUser));
+                } catch (Exception e) {
+                    showErrorDialog(project, "Cannot change assignee of this merge request.", "Cannot Change Assignee");
+                }
+                return null;
+            });
+        });
+
+        templateBox.setEditable(true);
+        templateBox.addItem("None");
+
+        VirtualFile gitlabIssueTemplatesRoot = mergeRequestWorker.getGitlabIssueTemplatesRoot();
+        if (gitlabIssueTemplatesRoot != null) {
+            for (VirtualFile file : gitlabIssueTemplatesRoot.getChildren()) {
+                if (!file.isDirectory()) {
+                    templateBox.addItem(file.getName());
+                }
+            }
+        }
+
+        templateBox.addItemListener(itemEvent -> {
+            if (ItemEvent.SELECTED == itemEvent.getStateChange()) {
+                String selectedItem = itemEvent.getItem().toString();
+                if (gitlabIssueTemplatesRoot != null) {
+                    VirtualFile fileByRelativePath = gitlabIssueTemplatesRoot.findFileByRelativePath(selectedItem);
+                    if (fileByRelativePath != null && fileByRelativePath.exists()) {
+                        try {
+                            String text = VfsUtil.loadText(fileByRelativePath);
+                            mergeDescription.setText(text);
+                            return;
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                mergeDescription.setText("");
+            }
+        });
+
 
         currentBranch.setText(mergeRequestWorker.getGitLocalBranch().getName());
 
@@ -142,6 +199,10 @@ public class CreateMergeRequestDialog extends DialogWrapper {
     }
 
     private String mergeTitleGenerator(BranchInfo branchInfo) {
+        String lastCommitMessage = mergeRequestWorker.getLastCommitMessage();
+        if (lastCommitMessage != null && !"".equals(lastCommitMessage)) {
+            return lastCommitMessage;
+        }
         return "Merge of " + currentBranch.getText() + " to " + branchInfo;
     }
 

@@ -65,6 +65,7 @@
 
             <add-to-group group-id="Git.Menu"/>
             <add-to-group group-id="Git.ContextMenu"/>
+            <add-to-group group-id="ChangesViewToolbar" anchor="after" relative-to-action="ChangesView.Revert"/>
         </group>
     </actions>
 
